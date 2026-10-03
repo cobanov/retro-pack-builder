@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retro Pack Builder</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1c1a; --muted: #6d6a64; --line: #e3e0d9;
+  --accent: #2f6fde; --accent-ink: #ffffff; --accent-soft: #e5eefc; --save: #1f8a5b;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
+  --playing: #2fa35a; --completed: #3b7ddd; --on_hold: #d39b1c; --dropped: #d4534c; --plan: #8a8f98;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --panel: #1d1d1b; --ink: #ecebe8; --muted: #9a978f; --line: #2e2d2a;
+    --accent: #6b9cff; --accent-ink: #0d1424; --accent-soft: #1c2840; --save: #4cc38a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+    --playing: #4cc38a; --completed: #6b9cff; --on_hold: #e8b54a; --dropped: #ef6b63; --plan: #9aa0a8;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; z-index: 10; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; }
+.stat { color: var(--muted); }
+.stat b { color: var(--ink); }
+.grow { flex: 1; }
+input[type=search] { width: 240px; max-width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 12px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .6; cursor: progress; }
+.layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 58px); }
+nav { border-right: 1px solid var(--line); padding: 10px 8px 24px; overflow-y: auto; position: sticky; top: 58px; height: calc(100vh - 58px); }
+nav .navh { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 10px 4px; }
+nav a { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; color: var(--ink); text-decoration: none; }
+nav a:hover { background: var(--bg); }
+nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+nav .n b { color: var(--accent); }
+body.dragging nav a[data-drop] { outline: 1px dashed var(--line); outline-offset: -1px; }
+nav a.over { background: var(--accent-soft); outline: 2px solid var(--accent) !important; }
+nav .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--c); }
+main { padding: 16px 20px 40px; min-width: 0; }
+.bar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.bar h2 { margin: 0; font-size: 20px; }
+.bar label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; color: var(--muted); }
+.toolbar label { display: flex; gap: 6px; align-items: center; }
+select { font: inherit; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+button.small { padding: 6px 11px; font-size: 13px; }
+button.danger { border-color: var(--dropped); color: var(--dropped); }
+.pill { font-size: 13px; color: var(--muted); padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 14px; padding-bottom: 4px; scrollbar-width: thin; }
+.tab { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; font-size: 13px; white-space: nowrap; }
+.tab .c { color: var(--muted); margin-left: 6px; font-variant-numeric: tabular-nums; }
+.tab.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.tab.on .c { color: inherit; opacity: .8; }
+section + section { margin-top: 26px; }
+section h3 { margin: 0 0 10px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; }
+section h3 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+/* Each system has its own cover shape (PSP tall, SNES wide, GBA square): the grid carries it as --ar */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--min, 150px), 1fr)); gap: 14px; }
+.card { position: relative; background: var(--panel); border: 2px solid transparent; border-radius: 10px; box-shadow: var(--shadow);
+  overflow: visible; cursor: pointer; display: flex; flex-direction: column; transition: border-color .12s, transform .12s; }
+.card:hover { transform: translateY(-1px); }
+.card.sel { border-color: var(--accent); }
+.cover { position: relative; aspect-ratio: var(--ar, 1); overflow: hidden; background: var(--bg); border-radius: 8px 8px 0 0; }
+.cover img.fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cover img.fit { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; }
+.cover .ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; font-weight: 700; color: var(--muted); }
+.meta { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.name { font-weight: 600; line-height: 1.25; min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sub { color: var(--muted); font-size: 12px; margin-top: -3px; }
+.check { position: absolute; z-index: 2; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--panel); border: 2px solid var(--line); font-weight: 700; color: transparent; }
+.card.sel .check { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.save { color: var(--save); display: inline-flex; flex: 0 0 auto; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 9px;
+  border-radius: 999px; background: transparent; color: var(--muted); }
+.st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1px dashed var(--muted); }
+.st.has { color: var(--ink); border-color: color-mix(in srgb, var(--c) 50%, var(--line)); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.st.has::before { background: var(--c); border-color: var(--c); }
+.card:not(:hover) .st:not(.has) { visibility: hidden; }
+#menu { position: absolute; z-index: 30; min-width: 170px; padding: 4px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+#menu button { display: flex; width: 100%; gap: 8px; align-items: center; border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 7px; }
+#menu button:hover { background: var(--bg); }
+#menu button.on { font-weight: 600; }
+#menu .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+#menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px; }
+nav a.newpack { color: var(--muted); }
+#pdlg form { margin: 0; }
+#pdlg .pbody { padding: 14px 18px 6px; }
+#pdlg input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+#pdlg .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+#pdlg .pfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 18px 14px; }
+.empty { color: var(--muted); padding: 40px 0; text-align: center; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); width: min(640px, calc(100vw - 32px)); padding: 0; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog .hd { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+dialog pre { margin: 0; padding: 14px 18px; max-height: 60vh; overflow: auto; white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px;
+  border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; }
+.toast.show { opacity: 1; }
+@media (max-width: 760px) {
+  header { padding: 10px 16px; }
+  .layout { grid-template-columns: 1fr; }
+  nav { position: static; height: auto; display: flex; overflow-x: auto; gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; }
+  nav a { flex: 0 0 auto; }
+  nav .navh { display: none; }
+  main { padding: 14px 16px 40px; }
+  .grid { gap: 10px; }
+  input[type=search] { width: 100%; }
+  .card .st:not(.has) { visibility: visible; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Retro Pack Builder</h1>
+  <span class="stat"><b id="packname">…</b> · <b id="count">…</b> games · <b id="size">…</b></span>
+  <span class="grow"></span>
+  <input type="search" id="q" placeholder="Search games…" autocomplete="off">
+  <button class="primary" id="build">Build pack</button>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main>
+    <div class="bar">
+      <h2 id="title"></h2>
+      <span id="packacts" hidden>
+        <button class="small" id="prename">Rename</button>
+        <button class="small" id="pdup">Duplicate</button>
+        <button class="small" id="pdel">Delete pack</button>
+      </span>
+      <span class="grow"></span>
+      <span class="pill" id="coverjob" hidden></span>
+      <button class="small" id="covers" hidden>Fetch missing covers</button>
+    </div>
+    <div class="toolbar">
+      <select id="sort" aria-label="Sort">
+        <option value="name">Name, A to Z</option>
+        <option value="name-desc">Name, Z to A</option>
+        <option value="size">Size, largest first</option>
+        <option value="status">Status</option>
+        <option value="save">Saves first</option>
+      </select>
+      <select id="stfilter" aria-label="Filter by status">
+        <option value="">Any status</option>
+        <option value="playing">Playing</option>
+        <option value="completed">Completed</option>
+        <option value="on_hold">On hold</option>
+        <option value="dropped">Dropped</option>
+        <option value="plan">Plan to play</option>
+        <option value="none">No status</option>
+      </select>
+      <label><input type="checkbox" id="saveonly"> With save</label>
+      <label id="onlywrap"><input type="checkbox" id="only"> Selected only</label>
+      <span class="grow"></span>
+      <button class="small" id="selall" hidden></button>
+      <button class="small" id="deselall" hidden></button>
+    </div>
+    <div class="tabs" id="tabs" hidden></div>
+    <div id="content"></div>
+    <div class="empty" id="empty" hidden>No games to show.</div>
+  </main>
+</div>
+<div id="menu" hidden></div>
+<dialog id="pdlg"><form method="dialog"><div class="hd"><span id="pdlgt">New pack</span></div>
+  <div class="pbody"><input id="pname" placeholder="Pack name, e.g. ds-favourites" autocomplete="off" maxlength="40" required>
+  <p class="hint">Letters, digits and dashes. Spaces become dashes.</p></div>
+  <div class="pfoot"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Save</button></div></form></dialog>
+<dialog id="dlg"><div class="hd"><span id="dlgt">Pack</span><button id="close">Close</button></div><pre id="out"></pre></dialog>
+<div class="toast" id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const STATUS = {playing: "Playing", completed: "Completed", on_hold: "On hold", dropped: "Dropped", plan: "Plan to play"};
+const DISK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3"/><path d="M7 21v-7h10v7"/></svg>';
+let view = location.hash.slice(1) || "selected", list = [], sum = null, tab = "all", menuFor = null;
+let pack = (() => { try { return localStorage.getItem("rp#pack") || "top"; } catch (e) { return "top"; } })();
+const fmt = b => b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const isStatusView = () => view.startsWith("status:");
+const isSystemView = () => view !== "selected" && !isStatusView();
+const sysInfo = id => (sum.systems.find(s => s.id === id) || {ar: 1, label: id});
+const minWidth = ar => Math.max(110, Math.min(230, Math.round(160 * Math.sqrt(ar))));
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 2200); }
+async function api(p, body) {
+  // Every call is about the active pack unless the body names another one
+  const url = body ? p : p + (p.includes("?") ? "&" : "?") + "pack=" + encodeURIComponent(pack);
+  const r = await fetch(url, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({pack, ...body})} : {});
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+function renderNav() {
+  $("#packname").textContent = sum.pack; $("#count").textContent = sum.selectedTotal; $("#size").textContent = fmt(sum.sizeBytes);
+  const packs = sum.packs.some(p => p.name === sum.pack) ? sum.packs : [{name: sum.pack, games: 0}, ...sum.packs];
+  const a = (href, label, n, extra = "", drop = false) =>
+    `<a href="#${href}" class="${view === href ? "on" : ""}"${drop ? ` data-drop="${href}"` : ""}>${extra}<span style="flex:1">${esc(label)}</span><span class="n">${n}</span></a>`;
+  $("#nav").innerHTML =
+    `<div class="navh">Packs</div>` +
+    packs.map(p => `<a href="#selected" class="${p.name === sum.pack && view === "selected" ? "on" : ""}" data-pack="${esc(p.name)}" data-drop="pack:${esc(p.name)}">` +
+      `<span style="flex:1">${esc(p.name)}</span><span class="n">${p.name === sum.pack ? `<b>${sum.selectedTotal}</b>` : p.games}</span></a>`).join("") +
+    `<a href="#" class="newpack" id="newpack">+ New pack</a>` +
+    `<div class="navh">My list</div>` +
+    Object.entries(STATUS).map(([k, l]) => a("status:" + k, l, sum.statusCounts[k] || 0, `<span class="dot" style="--c:var(--${k})"></span>`, true)).join("") +
+    `<div class="navh">Systems</div>` +
+    sum.systems.map(s => a(s.id, s.label, (s.selected ? `<b>${s.selected}</b> / ` : "") + s.total)).join("");
+}
+function card(g, ar) {
+  const fill = g.ar && Math.abs(g.ar / ar - 1) < 0.12;
+  const st = g.status ? `<button class="st has" style="--c:var(--${g.status})">${STATUS[g.status]}</button>` : `<button class="st">Add status</button>`;
+  return `<div class="card ${g.selected ? "sel" : ""}" draggable="true" data-rel="${esc(g.rel)}" title="${esc(g.file)}">
+    <span class="check">✓</span>
+    <div class="cover">${g.art ? `<img class="${fill ? "fill" : "fit"}" loading="lazy" src="/art?rel=${encodeURIComponent(g.rel)}&v=${g.art}" alt="">` : `<span class="ph">${esc(g.name.slice(0, 2))}</span>`}</div>
+    <div class="meta"><div class="name">${esc(g.name)}</div>${g.size && !isSystemView() ? `<div class="sub">${fmt(g.size)}</div>` : ""}
+      <div class="foot">${st}${g.save ? `<span class="save" title="Has a save">${DISK}</span>` : ""}</div></div>
+  </div>`;
+}
+const grid = (games, sysId) => { const ar = sysInfo(sysId).ar; return `<div class="grid" style="--ar:${ar};--min:${minWidth(ar)}px">${games.map(g => card(g, ar)).join("")}</div>`; };
+function renderTabs(rows) {
+  const el = $("#tabs"); el.hidden = isSystemView(); if (el.hidden) return;
+  const counts = {}; rows.forEach(g => counts[g.sys] = (counts[g.sys] || 0) + 1);
+  if (tab !== "all" && !counts[tab]) tab = "all";
+  el.innerHTML = `<button class="tab ${tab === "all" ? "on" : ""}" data-t="all">All<span class="c">${rows.length}</span></button>` +
+    sum.systems.filter(s => counts[s.id]).map(s => `<button class="tab ${tab === s.id ? "on" : ""}" data-t="${s.id}">${esc(s.label)}<span class="c">${counts[s.id]}</span></button>`).join("");
+}
+function render() {
+  const rows = sortRows(shownRows());
+  renderTabs(rows);
+  renderBulk(rows);
+  const section = (label, games, sysId) => games.length ? `<section><h3>${esc(label)}<span>${games.length}</span></h3>${grid(games, sysId)}</section>` : "";
+  let html = "";
+  if (isSystemView()) {
+    // Picked games float to the top so they stand apart from the rest of the system
+    html = section("Selected", rows.filter(g => g.selected), view) + section("Other games", rows.filter(g => !g.selected), view);
+  } else if (tab !== "all") html = grid(rows.filter(g => g.sys === tab), tab);
+  else {
+    const groups = {}; rows.forEach(g => (groups[g.sys] = groups[g.sys] || []).push(g));
+    html = sum.systems.filter(s => groups[s.id]).map(s => section(s.label, groups[s.id], s.id)).join("");
+  }
+  $("#content").innerHTML = html; $("#empty").hidden = !!html;
+}
+async function load() {
+  sum = await api("/api/summary");
+  $("#title").textContent = view === "selected" ? sum.pack : isStatusView() ? STATUS[view.slice(7)] : sysInfo(view).label;
+  $("#packacts").hidden = view !== "selected";
+  $("#onlywrap").hidden = !isSystemView();
+  renderNav();
+  const qs = view === "selected" ? "" : isStatusView() ? "?status=" + view.slice(7) : "?sys=" + view;
+  list = (await api("/api/games" + qs)).games;
+  render(); renderCoverButton();
+}
+function closeMenu() { $("#menu").hidden = true; menuFor = null; }
+function openMenu(btn, g) {
+  menuFor = g; const m = $("#menu"), r = btn.getBoundingClientRect();
+  m.innerHTML = Object.entries(STATUS).map(([k, l]) => `<button data-s="${k}" class="${g.status === k ? "on" : ""}"><span class="dot" style="--c:var(--${k})"></span>${l}</button>`).join("") +
+    (g.status ? `<hr><button data-s="">Clear status</button>` : "");
+  m.hidden = false;
+  const left = Math.min(r.left + scrollX, scrollX + document.documentElement.clientWidth - m.offsetWidth - 8);
+  const below = r.bottom + 4 + m.offsetHeight < innerHeight;
+  m.style.left = left + "px"; m.style.top = (below ? r.bottom + 4 : r.top - m.offsetHeight - 4) + scrollY + "px";
+}
+async function setStatus(g, s) {
+  try {
+    sum = await api("/api/status", {rel: g.rel, status: s}); g.status = s;
+    if (isStatusView() && s !== view.slice(7)) list.splice(list.indexOf(g), 1);
+    renderNav(); render(); toast(s ? `${g.name}: ${STATUS[s]}` : `${g.name}: status cleared`);
+  } catch (err) { toast("Error: " + err.message); }
+}
+async function setPicked(g, on) {
+  if (on === g.listed) { toast(on ? `${g.name} is already in the pack` : `${g.name} is not in the pack`); return; }
+  try {
+    sum = await api("/api/toggle", {rel: g.rel, on});
+    g.listed = on; g.selected = on;
+    if (view === "selected" && !g.selected) list.splice(list.indexOf(g), 1);
+    renderNav(); render(); toast((on ? "Added: " : "Removed: ") + g.name);
+  } catch (err) { toast("Error: " + err.message); }
+}
+$("#menu").addEventListener("click", e => {
+  const b = e.target.closest("button[data-s]"); if (!b || !menuFor) return;
+  const g = menuFor; closeMenu(); setStatus(g, b.dataset.s || null);
+});
+document.addEventListener("click", e => { if (!e.target.closest("#menu") && !e.target.closest(".st")) closeMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+$("#content").addEventListener("click", e => {
+  const c = e.target.closest(".card"); if (!c) return;
+  const g = list.find(x => x.rel === c.dataset.rel);
+  const stBtn = e.target.closest(".st");
+  if (stBtn) { menuFor === g ? closeMenu() : openMenu(stBtn, g); return; }
+  setPicked(g, !g.listed);
+});
+// Drag a card onto "Selected" (add to pack) or a My list entry (set status)
+let dragRel = null;
+const clearOver = () => document.querySelectorAll("nav a.over").forEach(a => a.classList.remove("over"));
+$("#content").addEventListener("dragstart", e => {
+  const c = e.target.closest(".card"); if (!c) return;
+  dragRel = c.dataset.rel; e.dataTransfer.setData("text/plain", dragRel); e.dataTransfer.effectAllowed = "move";
+  document.body.classList.add("dragging"); closeMenu();
+});
+$("#content").addEventListener("dragend", () => { dragRel = null; document.body.classList.remove("dragging"); clearOver(); });
+$("#nav").addEventListener("dragover", e => {
+  const a = e.target.closest("a[data-drop]"); if (!a || !dragRel) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  if (!a.classList.contains("over")) { clearOver(); a.classList.add("over"); }
+});
+$("#nav").addEventListener("dragleave", e => { const a = e.target.closest("a[data-drop]"); if (a && !a.contains(e.relatedTarget)) a.classList.remove("over"); });
+$("#nav").addEventListener("drop", e => {
+  const a = e.target.closest("a[data-drop]"); if (!a || !dragRel) return;
+  e.preventDefault(); clearOver();
+  const g = list.find(x => x.rel === dragRel), target = a.dataset.drop;
+  if (!g) return;
+  if (target.startsWith("pack:")) addToPack(g, target.slice(5)); else setStatus(g, target.slice(7));
+});
+const ORDER = Object.keys(STATUS);
+function shownRows() {
+  const q = $("#q").value.trim().toLowerCase(), only = $("#only").checked && isSystemView();
+  const st = $("#stfilter").value, saveOnly = $("#saveonly").checked;
+  return list.filter(g => (!q || g.name.toLowerCase().includes(q) || g.file.toLowerCase().includes(q))
+    && (!only || g.selected) && (!saveOnly || g.save)
+    && (!st || (st === "none" ? !g.status : g.status === st)));
+}
+function sortRows(rows) {
+  const by = $("#sort").value, name = (a, b) => a.name.localeCompare(b.name, undefined, {sensitivity: "base"});
+  const cmp = {
+    "name": name, "name-desc": (a, b) => name(b, a), "size": (a, b) => (b.size || 0) - (a.size || 0) || name(a, b),
+    "status": (a, b) => (a.status ? ORDER.indexOf(a.status) : 9) - (b.status ? ORDER.indexOf(b.status) : 9) || name(a, b),
+    "save": (a, b) => (b.save - a.save) || name(a, b),
+  }[by];
+  return [...rows].sort(cmp);
+}
+// What "Select all / Deselect all" act on: the games currently shown (search, filters and tab applied)
+function inScope(rows) { return isSystemView() || tab === "all" ? rows : rows.filter(g => g.sys === tab); }
+function renderBulk(rows) {
+  const scope = inScope(rows), add = scope.filter(g => !g.listed), rm = scope.filter(g => g.listed);
+  const sel = $("#selall"), des = $("#deselall");
+  sel.hidden = !isSystemView() || !add.length; sel.textContent = `Select all (${add.length})`;
+  des.hidden = !rm.length; des.textContent = (isSystemView() ? "Deselect all" : "Remove shown from pack") + ` (${rm.length})`;
+  des.classList.remove("danger"); des.dataset.armed = "";
+}
+async function bulk(on) {
+  const scope = inScope(sortRows(shownRows())), rels = scope.filter(g => g.listed !== on).map(g => g.rel);
+  if (!rels.length) return;
+  try {
+    sum = await api("/api/toggle", {rels, on});
+    scope.forEach(g => { if (rels.includes(g.rel)) { g.listed = on; g.selected = on; } });
+    if (view === "selected") list = list.filter(g => g.selected);
+    renderNav(); render(); toast(`${on ? "Added" : "Removed"} ${rels.length} game${rels.length === 1 ? "" : "s"}`);
+  } catch (err) { toast("Error: " + err.message); }
+}
+$("#selall").addEventListener("click", () => bulk(true));
+$("#deselall").addEventListener("click", e => {
+  const b = e.currentTarget;
+  if (b.dataset.armed) { bulk(false); return; }   // second click within 3 s confirms
+  b.dataset.armed = "1"; b.classList.add("danger"); const t = b.textContent; b.textContent = "Click again to confirm";
+  setTimeout(() => { if (b.dataset.armed) { b.dataset.armed = ""; b.classList.remove("danger"); b.textContent = t; } }, 3000);
+});
+for (const id of ["#sort", "#stfilter", "#saveonly"]) $(id).addEventListener("change", () => { try { localStorage.setItem("rp" + id, $(id).type === "checkbox" ? $(id).checked : $(id).value); } catch (e) {} render(); });
+try { $("#sort").value = localStorage.getItem("rp#sort") || "name"; } catch (e) {}
+
+// Box art: fetch missing covers from libretro-thumbnails (runs on the server, progress is polled)
+function renderCoverButton() {
+  const missing = isSystemView() ? list.filter(g => !g.art).length : null;
+  const b = $("#covers");
+  b.hidden = isSystemView() && !missing;
+  b.textContent = isSystemView() ? `Fetch missing covers (${missing})` : "Fetch missing covers (all systems)";
+}
+async function pollCovers() {
+  const j = await api("/api/boxart"), pill = $("#coverjob");
+  pill.hidden = !j.running; $("#covers").disabled = j.running;
+  if (j.running) {
+    const label = j.system ? sysInfo(j.system).label || j.system : "";
+    pill.textContent = `Fetching covers: ${label} ${j.done}/${j.total} · ${j.found} found`;
+    setTimeout(pollCovers, 1000); return;
+  }
+  if (pollCovers.active) {
+    pollCovers.active = false;
+    const found = j.results.reduce((n, r) => n + (r.found || 0), 0), total = j.results.reduce((n, r) => n + (r.total || 0), 0);
+    toast(j.error ? "Cover fetch failed: " + j.error : `Covers: found ${found} of ${total} missing`); load();
+  }
+}
+$("#covers").addEventListener("click", async () => {
+  try { await api("/api/boxart", isSystemView() ? {sys: view} : {}); pollCovers.active = true; pollCovers(); }
+  catch (err) { toast("Error: " + err.message); }
+});
+// ---- Packs: several saved lists, one of them active ----
+function setPack(name) {
+  pack = name; try { localStorage.setItem("rp#pack", name); } catch (e) {}
+  tab = "all";
+  if (location.hash !== "#selected") location.hash = "#selected"; else load();
+}
+async function addToPack(g, name) {
+  if (name === sum.pack) return setPicked(g, true);
+  try {
+    await api("/api/toggle", {pack: name, rels: [g.rel], on: true});
+    sum = await api("/api/summary"); renderNav(); toast(`Added to ${name}: ${g.name}`);
+  } catch (err) { toast("Error: " + err.message); }
+}
+function askName(title, value = "") {
+  const d = $("#pdlg"); $("#pdlgt").textContent = title; $("#pname").value = value; d.returnValue = "";
+  d.showModal(); $("#pname").select();
+  return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "ok" ? $("#pname").value.trim() : null), {once: true}));
+}
+async function packAction(action, name, to) {
+  try { const r = await api("/api/packs", {action, name, to}); return r; }
+  catch (err) { toast("Error: " + err.message); return null; }
+}
+$("#nav").addEventListener("click", async e => {
+  const pk = e.target.closest("a[data-pack]");
+  if (pk) { e.preventDefault(); setPack(pk.dataset.pack); return; }
+  if (e.target.closest("#newpack")) {
+    e.preventDefault();
+    const name = await askName("New pack"); if (!name) return;
+    const r = await packAction("create", name); if (r) { toast("Created " + r.pack); setPack(r.pack); }
+  }
+});
+$("#prename").addEventListener("click", async () => {
+  const to = await askName("Rename pack", sum.pack); if (!to || to === sum.pack) return;
+  const r = await packAction("rename", sum.pack, to); if (r) { toast("Renamed to " + r.pack); setPack(r.pack); }
+});
+$("#pdup").addEventListener("click", async () => {
+  const to = await askName("Duplicate pack", sum.pack + "-copy"); if (!to) return;
+  const r = await packAction("duplicate", sum.pack, to); if (r) { toast("Created " + r.pack); setPack(r.pack); }
+});
+$("#pdel").addEventListener("click", async e => {
+  const b = e.currentTarget;
+  if (!b.dataset.armed) {   // first click arms, second click within 3 s deletes
+    b.dataset.armed = "1"; b.classList.add("danger"); b.textContent = `Delete "${sum.pack}"?`;
+    setTimeout(() => { b.dataset.armed = ""; b.classList.remove("danger"); b.textContent = "Delete pack"; }, 3000);
+    return;
+  }
+  b.dataset.armed = ""; b.classList.remove("danger"); b.textContent = "Delete pack";
+  const gone = sum.pack, r = await packAction("delete", gone); if (!r) return;
+  toast("Deleted " + gone); setPack((r.packs[0] || {name: "top"}).name);
+});
+$("#tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (!b) return; tab = b.dataset.t; render(); });
+$("#q").addEventListener("input", render);
+$("#only").addEventListener("change", render);
+window.addEventListener("hashchange", () => { view = location.hash.slice(1) || "selected"; tab = "all"; $("#q").value = ""; closeMenu(); load(); });
+$("#build").addEventListener("click", async () => {
+  const b = $("#build"); b.disabled = true; b.textContent = "Building…";
+  try { const r = await api("/api/build", {}); $("#dlgt").textContent = r.ok ? "Pack ready" : "Build failed"; $("#out").textContent = r.output; $("#dlg").showModal(); }
+  catch (err) { toast("Error: " + err.message); }
+  b.disabled = false; b.textContent = "Build pack";
+});
+$("#close").addEventListener("click", () => $("#dlg").close());
+try { $("#stfilter").value = localStorage.getItem("rp#stfilter") || ""; $("#saveonly").checked = localStorage.getItem("rp#saveonly") === "true"; } catch (e) {}
+load().then(async () => { if ((await api("/api/boxart")).running) { pollCovers.active = true; pollCovers(); } });
+</script>
+</body>
+</html>

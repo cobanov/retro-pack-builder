@@ -1,0 +1,17 @@
+# Retro Pack Builder. Copy .env.example to .env, set RETRO_DIR, then: docker compose up -d
+services:
+  retro-pack-builder:
+    image: python:3.12-alpine
+    container_name: retro-pack-builder
+    user: "${PUID:-1000}:${PGID:-1000}"   # owner of your archive files, so nothing ends up owned by root
+    command: ["python3", "/app/app.py"]
+    environment:
+      RETRO: /retro
+      PORT: "8790"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./:/app:ro
+      - ${RETRO_DIR:?set RETRO_DIR in .env}:/retro
+    ports:
+      - "${PORT:-8790}:8790"
+    restart: unless-stopped
