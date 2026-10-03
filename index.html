@@ -9,6 +9,7 @@
   --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1c1a; --muted: #6d6a64; --line: #e3e0d9;
   --accent: #2f6fde; --accent-ink: #ffffff; --accent-soft: #e5eefc; --save: #1f8a5b;
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);  /* easeOutCubic: quick start, soft landing */
   --playing: #2fa35a; --completed: #3b7ddd; --on_hold: #d39b1c; --dropped: #d4534c; --plan: #8a8f98;
 }
 @media (prefers-color-scheme: dark) {
@@ -29,13 +30,16 @@ h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; }
 .grow { flex: 1; }
 input[type=search] { width: 240px; max-width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--bg); color: var(--ink); font: inherit; }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 12px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 12px;
+  transition: background-color .12s, border-color .12s, color .12s, transform .08s var(--ease-out); }
+button:active:not(:disabled) { transform: scale(.97); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 button:disabled { opacity: .6; cursor: progress; }
 .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 58px); }
 nav { border-right: 1px solid var(--line); padding: 10px 8px 24px; overflow-y: auto; position: sticky; top: 58px; height: calc(100vh - 58px); }
 nav .navh { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 10px 4px; }
-nav a { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; color: var(--ink); text-decoration: none; }
+nav a { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; color: var(--ink); text-decoration: none;
+  transition: background-color .12s, color .12s; }
 nav a:hover { background: var(--bg); }
 nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 nav .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
@@ -85,6 +89,8 @@ section h3 span { color: var(--muted); font-weight: 400; font-size: 13px; }
 .st.has { color: var(--ink); border-color: color-mix(in srgb, var(--c) 50%, var(--line)); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .st.has::before { background: var(--c); border-color: var(--c); }
 .card:not(:hover) .st:not(.has) { visibility: hidden; }
+#menu { transform-origin: top left; transition: opacity .12s var(--ease-out), transform .12s var(--ease-out); }
+#menu.closed { opacity: 0; transform: translateY(-4px) scale(.97); pointer-events: none; }
 #menu { position: absolute; z-index: 30; min-width: 170px; padding: 4px; background: var(--panel); border: 1px solid var(--line);
   border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
 #menu button { display: flex; width: 100%; gap: 8px; align-items: center; border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 7px; }
@@ -101,11 +107,20 @@ nav a.newpack { color: var(--muted); }
 .empty { color: var(--muted); padding: 40px 0; text-align: center; }
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); width: min(640px, calc(100vw - 32px)); padding: 0; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog[open] { animation: pop .18s var(--ease-out); }
+dialog[open]::backdrop { animation: fade .18s var(--ease-out); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes fade { from { opacity: 0; } }
 dialog .hd { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
 dialog pre { margin: 0; padding: 14px 18px; max-height: 60vh; overflow: auto; white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
-.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px;
-  border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; }
-.toast.show { opacity: 1; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 8px); background: var(--ink); color: var(--bg); padding: 9px 14px;
+  border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); pointer-events: none; z-index: 40; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.cover img { transition: opacity .2s var(--ease-out); }
+.cover img.pending { opacity: 0; }  /* covers still downloading fade in instead of popping */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}
 @media (max-width: 760px) {
   header { padding: 10px 16px; }
   .layout { grid-template-columns: 1fr; }
@@ -228,7 +243,46 @@ function renderTabs(rows) {
   el.innerHTML = `<button class="tab ${tab === "all" ? "on" : ""}" data-t="all">All<span class="c">${rows.length}</span></button>` +
     sum.systems.filter(s => counts[s.id]).map(s => `<button class="tab ${tab === s.id ? "on" : ""}" data-t="${s.id}">${esc(s.label)}<span class="c">${counts[s.id]}</span></button>`).join("");
 }
-function render() {
+// ---- Motion: short, ease-out, transforms and opacity only; off when the OS asks for reduced motion ----
+const REDUCE = matchMedia("(prefers-reduced-motion: reduce)");
+const EASE = "cubic-bezier(0.215, 0.61, 0.355, 1)", EASE_IN = "cubic-bezier(0.55, 0.055, 0.675, 0.19)";
+const near = r => r.bottom > -150 && r.top < innerHeight + 150;   // only animate what is (almost) on screen
+function cardRects() {
+  const m = new Map(); if (REDUCE.matches) return m;
+  document.querySelectorAll("#content .card").forEach(el => { const r = el.getBoundingClientRect(); if (near(r)) m.set(el.dataset.rel, r); });
+  return m;
+}
+// FLIP: cards glide from where they were to where they are now; new ones fade in with a small stagger
+function flip(before, fresh) {
+  if (REDUCE.matches) return;
+  const c = $("#content");
+  if (fresh) { c.animate([{opacity: 0, transform: "translateY(6px)"}, {opacity: 1, transform: "none"}], {duration: 200, easing: EASE}); return; }
+  let n = 0;
+  c.querySelectorAll(".card").forEach(el => {
+    const r = el.getBoundingClientRect(); if (!near(r)) return;
+    const b = before.get(el.dataset.rel);
+    if (b) {
+      const dx = b.left - r.left, dy = b.top - r.top;
+      if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: "none"}], {duration: 260, easing: EASE});
+    } else el.animate([{opacity: 0, transform: "scale(.96)"}, {opacity: 1, transform: "none"}], {duration: 200, easing: EASE, delay: Math.min(n++ * 15, 120), fill: "backwards"});
+  });
+}
+async function exitCards(rels) {
+  if (REDUCE.matches) return;
+  const gone = new Set(rels), anims = [];
+  document.querySelectorAll("#content .card").forEach(el => {
+    if (gone.has(el.dataset.rel) && near(el.getBoundingClientRect()))
+      anims.push(el.animate([{opacity: 1, transform: "none"}, {opacity: 0, transform: "scale(.94)"}], {duration: 150, easing: EASE_IN, fill: "forwards"}).finished);
+  });
+  await Promise.all(anims);
+}
+function popCheck(rel) {
+  if (REDUCE.matches) return;
+  const el = [...document.querySelectorAll("#content .card")].find(c => c.dataset.rel === rel);
+  el?.querySelector(".check")?.animate([{transform: "scale(.6)"}, {transform: "scale(1.12)"}, {transform: "none"}], {duration: 220, easing: EASE});
+}
+function render(fresh = false) {
+  const before = fresh ? null : cardRects();
   const rows = sortRows(shownRows());
   renderTabs(rows);
   renderBulk(rows);
@@ -243,6 +297,13 @@ function render() {
     html = sum.systems.filter(s => groups[s.id]).map(s => section(s.label, groups[s.id], s.id)).join("");
   }
   $("#content").innerHTML = html; $("#empty").hidden = !!html;
+  $("#content").querySelectorAll("img").forEach(img => {
+    if (img.complete) return;
+    img.classList.add("pending");
+    const done = () => img.classList.remove("pending");
+    img.addEventListener("load", done, {once: true}); img.addEventListener("error", done, {once: true});
+  });
+  flip(before, fresh);
 }
 async function load() {
   sum = await api("/api/summary");
@@ -252,22 +313,29 @@ async function load() {
   renderNav();
   const qs = view === "selected" ? "" : isStatusView() ? "?status=" + view.slice(7) : "?sys=" + view;
   list = (await api("/api/games" + qs)).games;
-  render(); renderCoverButton();
+  render(true); renderCoverButton();
 }
-function closeMenu() { $("#menu").hidden = true; menuFor = null; }
+function closeMenu() {
+  const m = $("#menu"); menuFor = null;
+  if (m.hidden || m.classList.contains("closed")) return;
+  m.classList.add("closed"); clearTimeout(m._t);
+  m._t = setTimeout(() => { if (m.classList.contains("closed")) m.hidden = true; }, 130);
+}
 function openMenu(btn, g) {
   menuFor = g; const m = $("#menu"), r = btn.getBoundingClientRect();
   m.innerHTML = Object.entries(STATUS).map(([k, l]) => `<button data-s="${k}" class="${g.status === k ? "on" : ""}"><span class="dot" style="--c:var(--${k})"></span>${l}</button>`).join("") +
     (g.status ? `<hr><button data-s="">Clear status</button>` : "");
-  m.hidden = false;
+  clearTimeout(m._t); m.classList.add("closed"); m.hidden = false;
   const left = Math.min(r.left + scrollX, scrollX + document.documentElement.clientWidth - m.offsetWidth - 8);
   const below = r.bottom + 4 + m.offsetHeight < innerHeight;
   m.style.left = left + "px"; m.style.top = (below ? r.bottom + 4 : r.top - m.offsetHeight - 4) + scrollY + "px";
+  m.style.transformOrigin = below ? "top left" : "bottom left";
+  requestAnimationFrame(() => m.classList.remove("closed"));
 }
 async function setStatus(g, s) {
   try {
     sum = await api("/api/status", {rel: g.rel, status: s}); g.status = s;
-    if (isStatusView() && s !== view.slice(7)) list.splice(list.indexOf(g), 1);
+    if (isStatusView() && s !== view.slice(7)) { await exitCards([g.rel]); list.splice(list.indexOf(g), 1); }
     renderNav(); render(); toast(s ? `${g.name}: ${STATUS[s]}` : `${g.name}: status cleared`);
   } catch (err) { toast("Error: " + err.message); }
 }
@@ -276,8 +344,9 @@ async function setPicked(g, on) {
   try {
     sum = await api("/api/toggle", {rel: g.rel, on});
     g.listed = on; g.selected = on;
-    if (view === "selected" && !g.selected) list.splice(list.indexOf(g), 1);
-    renderNav(); render(); toast((on ? "Added: " : "Removed: ") + g.name);
+    if (view === "selected" && !g.selected) { await exitCards([g.rel]); list.splice(list.indexOf(g), 1); }
+    renderNav(); render(); if (on) popCheck(g.rel);
+    toast((on ? "Added: " : "Removed: ") + g.name);
   } catch (err) { toast("Error: " + err.message); }
 }
 $("#menu").addEventListener("click", e => {
@@ -347,7 +416,7 @@ async function bulk(on) {
   try {
     sum = await api("/api/toggle", {rels, on});
     scope.forEach(g => { if (rels.includes(g.rel)) { g.listed = on; g.selected = on; } });
-    if (view === "selected") list = list.filter(g => g.selected);
+    if (view === "selected" && !on) { await exitCards(rels); list = list.filter(g => g.selected); }
     renderNav(); render(); toast(`${on ? "Added" : "Removed"} ${rels.length} game${rels.length === 1 ? "" : "s"}`);
   } catch (err) { toast("Error: " + err.message); }
 }

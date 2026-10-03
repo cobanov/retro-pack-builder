@@ -8,6 +8,9 @@ Standard library only. Environment:
   DB     SQLite library for play status (default $RETRO/library.db)
   PORT   port to listen on (default 8790)
   BUILDER  pack builder script (default: build-pack.py next to this file)
+  CORS_ORIGIN  set (e.g. "*") to let browser apps on other origins call the API; off by default
+
+The UI talks to a small JSON API that scripts and agents can use too: GET /api describes it.
 """
 import json
 import os
@@ -34,6 +37,7 @@ SAVE_EXT = (".srm", ".sav", ".dsv")
 SKIP = {"neogeo.zip"}
 DB = os.environ.get("DB", os.path.join(RETRO, "library.db"))
 STATUSES = ["playing", "completed", "on_hold", "dropped", "plan"]
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "")
 
 SYSTEMS = [
     ("gb", "Game Boy"), ("gbc", "Game Boy Color"), ("gba", "Game Boy Advance"), ("nds", "Nintendo DS"),
@@ -303,20 +307,37 @@ def summary(pack):
             "missing": sorted(r for r in sel if not os.path.exists(os.path.join(ROMS, r))), "sizeBytes": size}
 
 
-def games(pack, sysn=None, status=None):
-    """One system's games, games with a given status, or (default) everything in the pack."""
+def matches(q, *texts):
+    """Every word of the query appears in the name or file name (case-insensitive)."""
+    hay = " ".join(texts).lower()
+    return all(w in hay for w in q.lower().split())
+
+
+def games(pack, sysn=None, status=None, q=None, limit=200):
+    """One system's games, games with a given status, a search across every system (q),
+    or (default) everything in the pack."""
     _, sel = read_list(pack)
     sv = saved()
     st = read_status()
-    if sysn:
-        names, arts = names_for(sysn), arts_for(sysn)
-        return [game(sysn, e, sel, sv, names, arts, with_size=True, st=st) for e in entries(sysn)]
+    if sysn or (q and not status):
+        out = []
+        for s in [sysn] if sysn else [k for k, _ in systems()]:
+            names, arts = names_for(s), arts_for(s)
+            for e in entries(s):
+                g = game(s, e, sel, sv, names, arts, with_size=True, st=st)
+                if not q or matches(q, g["name"], e):
+                    out.append(g)
+                    if q and not sysn and len(out) >= limit:
+                        return out
+        return out
     rels = [r for r, v in st.items() if v["status"] == status] if status else set(sel)
     out = []
     for rel in sorted(rels):
         s, e = rel.split("/", 1)
         if os.path.exists(os.path.join(ROMS, rel)):
             out.append(game(s, e, sel, sv, names_for(s), arts_for(s), with_size=True, st=st))
+    if q:
+        out = [g for g in out if matches(q, g["name"], g["file"])]
     order = {k: i for i, (k, _) in enumerate(systems())}
     return sorted(out, key=lambda g: (order.get(g["sys"], 99), g["name"].lower()))
 
@@ -370,6 +391,33 @@ def prune(lines):
     return out
 
 
+API = {
+    "name": "Retro Pack Builder API",
+    "notes": [
+        "JSON over HTTP on the local network, no authentication.",
+        "Games are identified by rel = '<system>/<file name>' exactly as under roms/ (find them with /api/games?q=...).",
+        "Calls act on one pack: ?pack=<name> for GET, \"pack\" in the JSON body for POST. Default: the PACK setting.",
+    ],
+    "endpoints": [
+        {"method": "GET", "path": "/api", "does": "this description"},
+        {"method": "GET", "path": "/api/summary?pack=top", "does": "systems with game counts and cover shape, pack size, saved packs, status counts"},
+        {"method": "GET", "path": "/api/games?q=chrono trigger", "does": "search every system by name or file name (max 200 results)"},
+        {"method": "GET", "path": "/api/games?sys=snes&pack=top", "does": "all games of a system; 'selected' tells whether each is in the pack (q filters further)"},
+        {"method": "GET", "path": "/api/games?status=playing", "does": "games with a play status: playing, completed, on_hold, dropped, plan"},
+        {"method": "GET", "path": "/api/games?pack=top", "does": "the games in a pack"},
+        {"method": "GET", "path": "/api/packs", "does": "saved packs with game counts"},
+        {"method": "POST", "path": "/api/packs", "body": {"action": "create | duplicate | rename | delete", "name": "rpg", "to": "new name (duplicate, rename)"}},
+        {"method": "POST", "path": "/api/toggle", "body": {"pack": "top", "rels": ["snes/Chrono Trigger (USA).zip"], "on": True},
+         "does": "add (on: true) or remove (on: false) games; returns the pack summary"},
+        {"method": "POST", "path": "/api/status", "body": {"rel": "gba/Metroid Fusion (USA).zip", "status": "completed (or null to clear)"}},
+        {"method": "POST", "path": "/api/build", "body": {"pack": "top"}, "does": "build packs/<pack>/ for the SD card; returns the builder output"},
+        {"method": "POST", "path": "/api/boxart", "body": {"sys": "gba (omit for every system)"}, "does": "start fetching missing covers in the background"},
+        {"method": "GET", "path": "/api/boxart", "does": "progress and results of the cover fetch"},
+        {"method": "GET", "path": "/art?rel=gba/Metroid Fusion (USA).zip", "does": "a game's cover image (PNG)"},
+    ],
+}
+
+
 # Box art download runs in the background; the UI polls /api/boxart for progress
 cover_job = {"running": False, "system": None, "done": 0, "total": 0, "found": 0, "results": [], "error": None}
 
@@ -412,8 +460,19 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         if cache:
             self.send_header("Cache-Control", cache)
+        if CORS_ORIGIN:
+            self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        """CORS preflight, only answered when CORS_ORIGIN is set."""
+        self.send_response(204 if CORS_ORIGIN else 405)
+        if CORS_ORIGIN:
+            self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self):
         u = urlparse(self.path)
@@ -422,6 +481,8 @@ class H(BaseHTTPRequestHandler):
         try:
             if u.path == "/":
                 return self.send(200, open(PAGE_FILE, "rb").read(), "text/html; charset=utf-8")
+            if u.path in ("/api", "/api/"):
+                return self.send(200, API)
             if u.path == "/api/summary":
                 return self.send(200, summary(pack))
             if u.path == "/api/packs":
@@ -429,12 +490,12 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/api/boxart":
                 return self.send(200, cover_job)
             if u.path == "/api/games":
-                s, st = q.get("sys"), q.get("status")
+                s, st, text = q.get("sys"), q.get("status"), (q.get("q") or "").strip()
                 if s and not is_system(s):
                     return self.send(404, {"error": "unknown system"})
                 if st and st not in STATUSES:
                     return self.send(404, {"error": "unknown status"})
-                return self.send(200, {"games": games(pack, s, st)})
+                return self.send(200, {"games": games(pack, s, st, text or None)})
             if u.path == "/art":
                 sysn, _, e = q.get("rel", "").partition("/")
                 if not is_system(sysn) or e not in entries(sysn):
